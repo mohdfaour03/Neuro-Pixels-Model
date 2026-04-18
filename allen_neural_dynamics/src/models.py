@@ -172,18 +172,100 @@ class HybridModel(nn.Module):
             I_curr = I_curr + dt_sub * (dI_mech + dI_res)
         
         x_next = torch.cat([E_curr, I_curr], dim=-1)
-        return x_next, E_curr, I_curr
+        
+        # Calculate L2 magnitude of raw residuals to regularize in training!
+        res_mag = torch.mean(dE_res**2 + dI_res**2)
+        
+        return x_next, E_curr, I_curr, res_mag
         
     def forward(self, x0, u_seq):
         seq_len = u_seq.size(1)
         preds, E_seq, I_seq = [], [], []
         x_curr = x0
+        self.last_residual_magnitude = 0.0
         for t in range(seq_len):
             u_t = u_seq[:, t, :]
-            x_next, E_next, I_next = self.step(x_curr, u_t)
+            x_next, E_next, I_next, res_mag = self.step(x_curr, u_t)
             preds.append(x_next)
             E_seq.append(E_next)
             I_seq.append(I_next)
             x_curr = x_next
+            self.last_residual_magnitude = self.last_residual_magnitude + res_mag
+            
+        return torch.stack(preds, dim=1), torch.stack(E_seq, dim=1), torch.stack(I_seq, dim=1)
+
+class LatentCTRNN(nn.Module):
+    def __init__(self, hidden_dim=64, dt=0.01):
+        super().__init__()
+        self.dt = dt
+        self.hidden_dim = hidden_dim
+        
+        self.W_h = nn.Linear(hidden_dim, hidden_dim)
+        self.W_u = nn.Linear(1, hidden_dim)
+        self.W_out = nn.Linear(hidden_dim, 2)
+        
+        self.tau = nn.Parameter(torch.ones(hidden_dim) * 0.1)
+        self.encoder = nn.Linear(2, self.hidden_dim)
+        
+    def step(self, h_curr, u_t):
+        steps = 5
+        dt_sub = self.dt / steps
+        for _ in range(steps):
+            # tau * dh/dt = -h + tanh(W_h h + W_u u)
+            dh = (-h_curr + torch.tanh(self.W_h(h_curr) + self.W_u(u_t))) / torch.clamp(self.tau, min=1e-3)
+            h_curr = h_curr + dt_sub * dh
+            
+        x_next = self.W_out(h_curr)
+        
+        E_next = x_next[:, 0:1]
+        I_next = x_next[:, 1:2]
+        return x_next, E_next, I_next, h_curr
+
+    def forward(self, x0, u_seq):
+        seq_len = u_seq.size(1)
+        batch_size = x0.size(0)
+        
+        h_curr = self.encoder(x0)
+        
+        preds, E_seq, I_seq = [], [], []
+        for t in range(seq_len):
+            u_t = u_seq[:, t, :]
+            x_next, E_next, I_next, h_curr = self.step(h_curr, u_t)
+            preds.append(x_next)
+            E_seq.append(E_next)
+            I_seq.append(I_next)
+            
+        return torch.stack(preds, dim=1), torch.stack(E_seq, dim=1), torch.stack(I_seq, dim=1)
+
+
+class LSTMBaseline(nn.Module):
+    def __init__(self, hidden_dim=64):
+        super().__init__()
+        self.hidden_dim = hidden_dim
+        self.h0_encoder = nn.Linear(2, hidden_dim)
+        self.c0_encoder = nn.Linear(2, hidden_dim)
+        
+        self.lstm = nn.LSTMCell(input_size=1, hidden_size=hidden_dim)
+        self.fc_out = nn.Linear(hidden_dim, 2)
+        
+    def forward(self, x0, u_seq):
+        seq_len = u_seq.size(1)
+        batch_size = x0.size(0)
+        
+        h_t = self.h0_encoder(x0)
+        c_t = self.c0_encoder(x0)
+        
+        preds, E_seq, I_seq = [], [], []
+        for t in range(seq_len):
+            u_t = u_seq[:, t, :]
+            h_t, c_t = self.lstm(u_t, (h_t, c_t))
+            
+            x_next = self.fc_out(h_t)
+            E_next = x_next[:, 0:1]
+            I_next = x_next[:, 1:2]
+            
+            preds.append(x_next)
+            E_seq.append(E_next)
+            I_seq.append(I_next)
             
         return torch.stack(preds, dim=1), torch.stack(E_seq, dim=1), torch.stack(I_seq, dim=1)

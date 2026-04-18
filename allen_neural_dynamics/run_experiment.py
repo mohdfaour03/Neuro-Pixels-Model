@@ -11,7 +11,7 @@ from src.data_access import get_session
 from src.preprocessing import extract_units, build_population_activity
 from src.features import build_stimulus_signal
 from src.datasets import create_dataloaders
-from src.models import PersistenceBaseline, LinearBaseline, MLPBaseline, MechanisticModel, HybridModel
+from src.models import PersistenceBaseline, LinearBaseline, MLPBaseline, MechanisticModel, HybridModel, LatentCTRNN, LSTMBaseline
 from src.train import train_model
 from src.evaluate import evaluate_model
 from src.visualize import plot_predictions, plot_loss_curves, plot_phase, plot_error, plot_residual_effect, plot_latent_trajectories
@@ -99,17 +99,14 @@ def main():
         )
         
     m_config = config['models'].get('mechanistic', {})
-    if config['models'].get('use_ei_model', True):
-        models_to_run['Mechanistic'] = MechanisticModel(
-            dt=m_config.get('dt', 0.01),
-            activation_function=m_config.get('activation_function', 'sigmoid')
+    if config['models'].get('use_mechanistic', True):
+        models_to_run['LatentCTRNN'] = LatentCTRNN(
+            hidden_dim=64, dt=m_config.get('dt', 0.01)
         )
         
     if config['models'].get('use_residual', True):
-        models_to_run['Hybrid'] = HybridModel(
-            dt=m_config.get('dt', 0.01),
-            activation_function=m_config.get('activation_function', 'sigmoid'),
-            residual_hidden_dims=config['models'].get('hybrid', {}).get('residual_hidden_dims', [16])
+        models_to_run['LSTMBaseline'] = LSTMBaseline(
+            hidden_dim=64
         )
     
     results = {}
@@ -122,16 +119,6 @@ def main():
     
     for name, model in models_to_run.items():
         save_path = os.path.join(out_dir, 'models', f"{name}.pth")
-        
-        # SEQUENTIAL PRE-TRAINING INJECTION 
-        # Isolate MLP by freezing optimized physics!
-        if name == 'Hybrid' and 'Mechanistic' in results:
-            mech_path = os.path.join(out_dir, 'models', 'Mechanistic.pth')
-            if os.path.exists(mech_path):
-                print("\n[!] Injecting pre-trained frozen Mechanistic ODE constraints into Hybrid physics core!")
-                model.mechanistic.load_state_dict(torch.load(mech_path))
-                for param in model.mechanistic.parameters():
-                    param.requires_grad = False
                     
         print(f"\n--- Training {name} ---")
         

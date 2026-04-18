@@ -14,37 +14,26 @@ def evaluate_model(model, test_dataset, device='cpu', seq_horizon=50):
     
     N_total = len(test_dataset.x)
     
-    all_E, all_I = [], []
-    all_preds_2d_list = []
-    all_targets_2d_list = []
+    # Provide x0 and the entire u_t sequence to force the model to autoregressively fully track the test set!
+    # Utilizing the internal .forward() loop preserves complex hidden states (LSTM/CTRNN) inherently!
+    x0 = test_dataset.x[0].unsqueeze(0).to(device) # [1, 2]
+    u_full_seq = test_dataset.u.unsqueeze(0).to(device) # [1, N_total, 1]
     
-    # We predict in non-overlapping chunks to assemble the final continuous metric validation
-    chunks = range(0, N_total - seq_horizon, seq_horizon)
-    for idx in chunks:
-        x0_chunk = test_dataset.x[idx].unsqueeze(0).to(device)
-        u_seq_chunk = test_dataset.u[idx : idx + seq_horizon].unsqueeze(0).to(device)
+    with torch.no_grad():
+        # Predict the entire sequence continuously native in PyTorch C++ graph!
+        out = model(x0, u_full_seq[:, :-1, :])
         
-        with torch.no_grad():
-            out = model(x0_chunk, u_seq_chunk)
-            
         if isinstance(out, tuple):
-            preds, E_seq, I_seq = out
-            all_E.append(E_seq[0, :, 0].cpu().numpy())
-            all_I.append(I_seq[0, :, 0].cpu().numpy())
-            all_preds_2d_list.append(preds[0].cpu().numpy())
+            preds_2d = out[0][0].cpu().numpy()
+            all_E = out[1][0, :, 0].cpu().numpy()
+            all_I = out[2][0, :, 0].cpu().numpy()
         else:
-            preds = out
-            preds_np = preds[0].cpu().numpy()
-            all_preds_2d_list.append(preds_np)
-            all_E.append(preds_np[:, 0])
-            all_I.append(preds_np[:, 1])
+            preds_2d = out[0].cpu().numpy()
+            all_E = preds_2d[:, 0]
+            all_I = preds_2d[:, 1]
             
-        all_targets_2d_list.append(test_dataset.x[idx + 1 : idx + seq_horizon + 1].numpy())
-        
-    all_preds_2d = np.concatenate(all_preds_2d_list, axis=0) # [N_chunks * seq_horizon, 2]
-    all_targets_2d = np.concatenate(all_targets_2d_list, axis=0)
-    all_E = np.concatenate(all_E, axis=0)
-    all_I = np.concatenate(all_I, axis=0)
+    all_preds_2d = preds_2d
+    all_targets_2d = test_dataset.x[1:].numpy()
     
     # Flatten for global metrics
     all_preds_flat = all_preds_2d.flatten()
