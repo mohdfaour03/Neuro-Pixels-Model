@@ -1,0 +1,41 @@
+# Allen Neuropixels Neural Dynamics Default Configuration
+
+project:
+  name: allen_neural_dynamics
+  data_dir: data/raw
+  output_dir: outputs
+  seed: 42
+
+data:
+  session_id: 715093703  # Default to a known session, can be overridden
+  region_acronym: VISp
+  bin_size: 0.01  # in seconds
+  smoothing_sigma: 0.05  # Gaussian filter standard deviation in seconds (0 for None)
+  min_units: 10
+  
+features:
+  stimulus_class: '' # empty string means all visual presentations, or specify e.g. 'flashes', 'drifting_gratings'
+  history_window: 1  # 1 means only current step is used: x(t), u(t) -> x(t+1)
+
+training:
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  batch_size: 512
+  sequence_length: 50
+  epochs: 100
+  learning_rate: 0.001
+  early_stopping_patience: 10
+
+models:
+  use_ei_model: true
+  use_residual: true
+  baseline_mlp:
+    hidden_dims: [32, 16]
+  mechanistic:
+    dt: 0.01
+    activation_function: sigmoid # sigmoid or tanh
+    observation_model: E_only # E_only or linear_combination
+    regularization_strength: 0.001
+  hybrid:
+    residual_hidden_dims: [16]
