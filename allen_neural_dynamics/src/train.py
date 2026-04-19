@@ -37,11 +37,12 @@ def train_model(model, train_loader, val_loader, config, save_path, device='cpu'
     for epoch in epoch_pbar:
         model.train()
         epoch_train_loss = 0.0
-        for x_t, u_t, target, _ in train_loader:
-            x_t, u_t, target = x_t.to(device), u_t.to(device), target.to(device)
+        for x_seq_in, u_t, target, _ in train_loader:
+            x_seq_in, u_t, target = x_seq_in.to(device), u_t.to(device), target.to(device)
+            x0 = x_seq_in[:, 0, :]
             
             optimizer.zero_grad()
-            out = model(x_t, u_t)
+            out = model(x0=x0, u_seq=u_t, x_seq=x_seq_in)
             
             if isinstance(out, tuple):
                 preds, E_seq, I_seq = out
@@ -69,7 +70,7 @@ def train_model(model, train_loader, val_loader, config, save_path, device='cpu'
             
             optimizer.step()
             
-            epoch_train_loss += loss.item() * x_t.size(0)
+            epoch_train_loss += loss.item() * x_seq_in.size(0)
             
         epoch_train_loss /= len(train_loader.dataset)
         train_losses.append(epoch_train_loss)
@@ -78,17 +79,18 @@ def train_model(model, train_loader, val_loader, config, save_path, device='cpu'
         model.eval()
         epoch_val_loss = 0.0
         with torch.no_grad():
-            for x_t, u_t, target, _ in val_loader:
-                x_t, u_t, target = x_t.to(device), u_t.to(device), target.to(device)
+            for x_seq_in, u_t, target, _ in val_loader:
+                x_seq_in, u_t, target = x_seq_in.to(device), u_t.to(device), target.to(device)
+                x0 = x_seq_in[:, 0, :]
                 
-                out = model(x_t, u_t)
+                out = model(x0=x0, u_seq=u_t, x_seq=x_seq_in)
                 if isinstance(out, tuple):
                     preds = out[0]
                 else:
                     preds = out
                     
                 loss = criterion(preds, target)
-                epoch_val_loss += loss.item() * x_t.size(0)
+                epoch_val_loss += loss.item() * x_seq_in.size(0)
                 
         epoch_val_loss /= len(val_loader.dataset)
         val_losses.append(epoch_val_loss)

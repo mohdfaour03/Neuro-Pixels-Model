@@ -14,14 +14,15 @@ def evaluate_model(model, test_dataset, device='cpu', seq_horizon=50):
     
     N_total = len(test_dataset.x)
     
-    # Provide x0 and the entire u_t sequence to force the model to autoregressively fully track the test set!
-    # Utilizing the internal .forward() loop preserves complex hidden states (LSTM/CTRNN) inherently!
-    x0 = test_dataset.x[0].unsqueeze(0).to(device) # [1, 2]
-    u_full_seq = test_dataset.u.unsqueeze(0).to(device) # [1, N_total, 1]
+    # Instead of blind simulation, we use sliding sequence-to-one forecasting!
+    # By providing the observed state at t, we predict the next state t+1 perfectly.
+    x_full_seq_in = test_dataset.x[:-1].unsqueeze(0).to(device) # [1, N-1, 2]
+    u_full_seq = test_dataset.u[:-1].unsqueeze(0).to(device) # [1, N-1, 1]
     
     with torch.no_grad():
-        # Predict the entire sequence continuously native in PyTorch C++ graph!
-        out = model(x0, u_full_seq[:, :-1, :])
+        with torch.backends.cudnn.flags(enabled=False):
+            x0_stub = x_full_seq_in[:, 0, :]
+            out = model(x0=x0_stub, u_seq=u_full_seq, x_seq=x_full_seq_in)
         
         if isinstance(out, tuple):
             preds_2d = out[0][0].cpu().numpy()

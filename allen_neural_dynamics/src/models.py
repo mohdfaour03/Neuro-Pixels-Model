@@ -6,7 +6,7 @@ class PersistenceBaseline(nn.Module):
     def __init__(self, *args, **kwargs):
         super().__init__()
         
-    def forward(self, x0, u_seq):
+    def forward(self, x0, u_seq, x_seq=None, **kwargs):
         seq_len = u_seq.size(1)
         preds = []
         x_curr = x0
@@ -22,7 +22,7 @@ class LinearBaseline(nn.Module):
         self.dt = dt
         self.linear = nn.Linear(input_dim, output_dim)
         
-    def forward(self, x0, u_seq):
+    def forward(self, x0, u_seq, x_seq=None, **kwargs):
         seq_len = u_seq.size(1)
         preds = []
         x_curr = x0
@@ -49,7 +49,7 @@ class MLPBaseline(nn.Module):
         layers.append(nn.Linear(curr_dim, output_dim))
         self.net = nn.Sequential(*layers)
         
-    def forward(self, x0, u_seq):
+    def forward(self, x0, u_seq, x_seq=None, **kwargs):
         seq_len = u_seq.size(1)
         preds = []
         x_curr = x0
@@ -104,7 +104,7 @@ class MechanisticModel(nn.Module):
         x_next = torch.cat([E_curr, I_curr], dim=-1)
         return x_next, E_curr, I_curr
         
-    def forward(self, x0, u_seq):
+    def forward(self, x0, u_seq, x_seq=None, **kwargs):
         seq_len = u_seq.size(1)
         preds, E_seq, I_seq = [], [], []
         x_curr = x0
@@ -132,21 +132,15 @@ class HybridModel(nn.Module):
                 param.requires_grad = False
                 
         
-        layers = []
-        curr_dim = 3  # E, I, u
-        for h_dim in residual_hidden_dims:
-            layers.append(nn.Linear(curr_dim, h_dim))
-            layers.append(nn.SiLU())
-            curr_dim = h_dim
-        layers.append(nn.Linear(curr_dim, 2)) # predict modification vectors [dE, dI] natively
-        self.residual_net = nn.Sequential(*layers)
+        hidden_dim = residual_hidden_dims[0]
+        self.residual_lstm = nn.LSTMCell(input_size=3, hidden_size=hidden_dim) # E, I, U
+        self.residual_proj = nn.Linear(hidden_dim, 2)
         
         # ZERO INITIALIZATION for the final projection layer to solve "Residual Domination"
-        # At epoch 0, the residual net will output exactly [0.0, 0.0] ensuring pure mechanistic ODE! 
-        nn.init.zeros_(self.residual_net[-1].weight)
-        nn.init.zeros_(self.residual_net[-1].bias)
+        nn.init.zeros_(self.residual_proj.weight)
+        nn.init.zeros_(self.residual_proj.bias)
         
-    def step(self, x_curr, u_t):
+    def step(self, x_curr, u_t, dE_res, dI_res):
         E_curr = x_curr[:, 0:1]
         I_curr = x_curr[:, 1:2]
         
@@ -163,11 +157,6 @@ class HybridModel(nn.Module):
             )
             dI_mech = -I_curr + S_I
             
-            inputs = torch.cat([torch.cat([E_curr, I_curr], dim=-1), u_t], dim=-1)
-            residuals = self.residual_net(inputs)
-            dE_res = residuals[:, 0:1]
-            dI_res = residuals[:, 1:2]
-            
             E_curr = E_curr + dt_sub * (dE_mech + dE_res)
             I_curr = I_curr + dt_sub * (dI_mech + dI_res)
         
@@ -178,14 +167,32 @@ class HybridModel(nn.Module):
         
         return x_next, E_curr, I_curr, res_mag
         
-    def forward(self, x0, u_seq):
+    def forward(self, x0, u_seq, x_seq=None, **kwargs):
         seq_len = u_seq.size(1)
+        batch_size = x0.size(0)
         preds, E_seq, I_seq = [], [], []
         x_curr = x0
         self.last_residual_magnitude = 0.0
+        
+        h_t = torch.zeros(batch_size, self.residual_lstm.hidden_size, device=x0.device)
+        c_t = torch.zeros(batch_size, self.residual_lstm.hidden_size, device=x0.device)
+        
         for t in range(seq_len):
             u_t = u_seq[:, t, :]
-            x_next, E_next, I_next, res_mag = self.step(x_curr, u_t)
+            
+            # Use real history x_seq if available (teacher forcing) for the LSTM residual!
+            if x_seq is not None:
+                x_in_lstm = x_seq[:, t, :]
+            else:
+                x_in_lstm = x_curr
+                
+            inputs = torch.cat([x_in_lstm, u_t], dim=-1)
+            h_t, c_t = self.residual_lstm(inputs, (h_t, c_t))
+            res_out = self.residual_proj(h_t)
+            dE_res = res_out[:, 0:1]
+            dI_res = res_out[:, 1:2]
+            
+            x_next, E_next, I_next, res_mag = self.step(x_curr, u_t, dE_res, dI_res)
             preds.append(x_next)
             E_seq.append(E_next)
             I_seq.append(I_next)
@@ -221,7 +228,7 @@ class LatentCTRNN(nn.Module):
         I_next = x_next[:, 1:2]
         return x_next, E_next, I_next, h_curr
 
-    def forward(self, x0, u_seq):
+    def forward(self, x0, u_seq, x_seq=None, **kwargs):
         seq_len = u_seq.size(1)
         batch_size = x0.size(0)
         
@@ -242,30 +249,46 @@ class LSTMBaseline(nn.Module):
     def __init__(self, hidden_dim=64):
         super().__init__()
         self.hidden_dim = hidden_dim
-        self.h0_encoder = nn.Linear(2, hidden_dim)
-        self.c0_encoder = nn.Linear(2, hidden_dim)
-        
-        self.lstm = nn.LSTMCell(input_size=1, hidden_size=hidden_dim)
+        # We now ingest the 2D state x AND 1D stimulus u directly!
+        self.lstm = nn.LSTM(input_size=3, hidden_size=hidden_dim, batch_first=True)
         self.fc_out = nn.Linear(hidden_dim, 2)
         
-    def forward(self, x0, u_seq):
-        seq_len = u_seq.size(1)
-        batch_size = x0.size(0)
-        
-        h_t = self.h0_encoder(x0)
-        c_t = self.c0_encoder(x0)
-        
-        preds, E_seq, I_seq = [], [], []
-        for t in range(seq_len):
-            u_t = u_seq[:, t, :]
-            h_t, c_t = self.lstm(u_t, (h_t, c_t))
+    def forward(self, x0, u_seq, x_seq=None, **kwargs):
+        # Time-Series Forecasting: If historical window data is available, ingest it natively!
+        if x_seq is not None:
+            # Shift x_seq by 1 or just map exactly. 
+            # In sliding window forecasting, we use historical x[0:t] to predict x[t+1]!
+            inputs = torch.cat([x_seq, u_seq], dim=-1).contiguous()
+            lstm_out, _ = self.lstm(inputs)
+            preds = self.fc_out(lstm_out)
             
-            x_next = self.fc_out(h_t)
-            E_next = x_next[:, 0:1]
-            I_next = x_next[:, 1:2]
+            E_seq = preds[:, :, 0:1]
+            I_seq = preds[:, :, 1:2]
+            return preds, E_seq, I_seq
             
-            preds.append(x_next)
-            E_seq.append(E_next)
-            I_seq.append(I_next)
+        else:
+            # If strictly autonomous forecasting required without true history
+            seq_len = u_seq.size(1)
+            batch_size = x0.size(0)
             
-        return torch.stack(preds, dim=1), torch.stack(E_seq, dim=1), torch.stack(I_seq, dim=1)
+            h_t = torch.zeros(1, batch_size, self.hidden_dim, device=x0.device)
+            c_t = torch.zeros(1, batch_size, self.hidden_dim, device=x0.device)
+            
+            x_curr = x0
+            preds, E_seq, I_seq = [], [], []
+            for t in range(seq_len):
+                u_t = u_seq[:, t, :]
+                inputs = torch.cat([x_curr, u_t], dim=-1).unsqueeze(1)
+                lstm_out, (h_t, c_t) = self.lstm(inputs, (h_t, c_t))
+                
+                x_next = self.fc_out(lstm_out.squeeze(1))
+                
+                E_next = x_next[:, 0:1]
+                I_next = x_next[:, 1:2]
+                
+                preds.append(x_next)
+                E_seq.append(E_next)
+                I_seq.append(I_next)
+                x_curr = x_next
+                
+            return torch.stack(preds, dim=1), torch.stack(E_seq, dim=1), torch.stack(I_seq, dim=1)

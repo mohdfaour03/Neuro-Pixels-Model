@@ -108,6 +108,11 @@ def main():
         models_to_run['LSTMBaseline'] = LSTMBaseline(
             hidden_dim=64
         )
+        models_to_run['HybridModel'] = HybridModel(
+            dt=m_config.get('dt', 0.01),
+            activation_function=m_config.get('activation_function', 'sigmoid'),
+            residual_hidden_dims=config['models'].get('hybrid', {}).get('residual_hidden_dims', [16])
+        )
     
     results = {}
     stored_preds = {}
