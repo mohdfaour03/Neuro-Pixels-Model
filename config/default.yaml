@@ -7,15 +7,16 @@ project:
   seed: 42
 
 data:
-  session_id: 715093703  # Default to a known session, can be overridden
-  region_acronym: VISp
-  bin_size: 0.01  # in seconds
-  smoothing_sigma: 0.05  # Gaussian filter standard deviation in seconds (0 for None)
-  min_units: 10
-  
+  session_id: 715093703
+  selected_regions: [VISp, VISl, VISal, VISpm, LGd]
+  min_units_per_region: 10
+  bin_size: 0.01
+  smoothing_sigma: 0.05
+  normalize_by_unit_count: true
+  use_multi_region_model: true
+
 features:
-  stimulus_class: '' # empty string means all visual presentations, or specify e.g. 'flashes', 'drifting_gratings'
-  history_window: 1  # 1 means only current step is used: x(t), u(t) -> x(t+1)
+  stimulus_class: ''
 
 training:
   train_split: 0.7
@@ -23,19 +24,41 @@ training:
   test_split: 0.15
   batch_size: 512
   sequence_length: 50
-  epochs: 100
+  rollout_length: 50
+  epochs: 60
   learning_rate: 0.001
-  early_stopping_patience: 10
+  early_stopping_patience: 8
+  prediction_mode: one_step
+  eval_mode: one_step
 
 models:
-  use_ei_model: true
+  use_mechanistic: true
   use_residual: true
+  use_cross_region_coupling: true
+  cross_coupling_mode: full
+  observation_model: E_only
+  activation_function: sigmoid
+  loss_region_weights: null
+  regularization_strength: 0.0001
+  coupling_regularization_strength: 0.0005
+  sparsity_regularization_strength: 0.0
+  smoothness_regularization_strength: 0.0
   baseline_mlp:
-    hidden_dims: [32, 16]
+    hidden_dims: [64, 32]
+  independent_region:
+    hidden_dim: 16
   mechanistic:
     dt: 0.01
-    activation_function: sigmoid # sigmoid or tanh
-    observation_model: E_only # E_only or linear_combination
-    regularization_strength: 0.001
+    activation_function: sigmoid
+    observation_model: E_only
+    cross_coupling_mode: full
+    local_coupling_init_scale: 0.2
+    cross_coupling_init_scale: 0.05
+    regularization_strength: 0.0001
+    coupling_regularization_strength: 0.0005
+    smoothness_regularization_strength: 0.0
   hybrid:
-    residual_hidden_dims: [32]
+    residual_hidden_dims: [64, 32]
+    residual_regularization_strength: 0.0001
+    residual_scale_init: -2.0
+    residual_design: shared_mlp
