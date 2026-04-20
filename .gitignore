@@ -1,0 +1,26 @@
+# Codex local state
+.codex
+
+# Python generated files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore package marker files by request.
+__init__.py
+
+# Ignore notebook variants whose basename ends with a number.
+*[0-9].ipynb
+
+# Keep checkpoints and data in version control.
+!Project/checkpoints/
+!Project/checkpoints/**
+!data/
+!data/**
+!*.npz
+
+# Keep experiment results in version control.
+!results/
+!results/**
+!Project/results/
+!Project/results/**
