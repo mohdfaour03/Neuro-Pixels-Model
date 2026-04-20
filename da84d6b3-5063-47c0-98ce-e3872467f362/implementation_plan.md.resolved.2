@@ -1,0 +1,31 @@
+# Goal: Implementing Takens' Delay-Coordinate Embedding to Infer I(t)
+
+The current implementation restricts $I(t)$ by forcing it to be a pure sigmoidal mapping directly directly from $E(t)$ at the same instantaneous exact moment. Mathematically, it is impossible to unfold a 2D differential system $(E, I)$ from purely 1D scalar snapshots $x(t)$ because the dynamics collapse into a 1D line manifold, causing the network to usually crush the unnecessary dimension $I(t)$ to $0$ as you observed. 
+
+Reviewing the literature on observing hidden population states (like the inhibitory Wilson-Cowan variable) using only a scalar excitatory channel points directly to **Takens’ Delay-Coordinate Embedding Theorem**. We must reconstruct the phase space using a temporal `history_window` (e.g. $[x_{t-9}, \dots, x_t]$).
+
+## Proposed Changes
+
+### `config/default.yaml`
+- Alter the `history_window` value under `features` from `1` to `10` (representing 100ms of lag data which is biologically plausible for distinguishing recurrent inhibitory lags).
+
+### `src/datasets.py`
+- Modify `NeuropixelsDataset` initialization and `create_dataloaders` to correctly generate sliding windows matrices instead of scalar column chunks.
+- The shape of $x_{t}$ will change from `[batch, 1]` to `[batch, history_window]`.
+- The target will appropriately track $x_{t+1}$ occurring immediately after the window ends.
+
+### `src/models.py`
+- **`MechanisticModel`**: Replace the instantaneous scalar mapping `I_t = S(w * E_t + b)` with mathematically sound Takens Embedders:
+  ```python
+  self.encoder_E = nn.Linear(history_window, 1)
+  self.encoder_I = nn.Linear(history_window, 1)
+  ```
+  This allows $E_t$ and $I_t$ to be independently deduced by examining the *slope and curvature* of the past 10 time steps, perfectly recovering the hidden inhibitory state!
+- Revamp `LinearBaseline` and `MLPBaseline` so their input layers accommodate `input_dim = history_window + 1` mathematically (history of $x$ plus the scalar stimulus $u$).
+
+### `run_experiment.py`
+- Extract `config['features']['history_window']` and thread it into Dataset and Model initialization.
+
+## User Review Required
+> [!IMPORTANT]
+> The exact optimal size for the delay embedding (the `history_window`) requires picking a range containing enough temporal variance to perceive the differential behavior (the $dx/dt$). Given bin size is 10ms, I am proposing `history_window: 10`, which constitutes 100ms. Does this feel aligned with visual cortex physiological standards, or would you prefer extending it further?

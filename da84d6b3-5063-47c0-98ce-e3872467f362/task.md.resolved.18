@@ -1,0 +1,7 @@
+# Implement Takens' Delay-Coordinate Embedding
+
+- [x] Modify `config/default.yaml` to set `history_window: 10`
+- [x] Refactor `src/datasets.py` to support sliding history windows instead of scalars
+- [x] Update `src/models.py` base parameters to handle `input_dim = history_window + u_dim`
+- [x] Update `MechanisticModel` and `HybridModel` to encode $(E_t, I_t)$ from `history_window`
+- [x] Run evaluation locally via `run_experiment.py` to confirm fixing the $I(t)$ flatlining

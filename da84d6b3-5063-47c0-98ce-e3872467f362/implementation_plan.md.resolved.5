@@ -1,0 +1,25 @@
+# Fixing BPTT Flatline Collapsing
+
+You are absolutely correct. The `results.json` explicitly shows that our variables completely catastrophically collapsed into a flatline (indicated by `Pred_Var` approaching an effective absolute zero around `0.0003` for the dynamic arrays). 
+
+This is a well-known mathematical crisis in modern computational neuroscience and Machine Learning! When utilizing Backpropagation Through Time (BPTT) and Neural ODE solvers on chaotic biological parameters (like your Wilson-Cowan equations), calculating an error over a full unrolled 50-step trajectory when the network weights are initialized completely randomly causes the gradients to mathematically explode towards infinity. To defend itself against generating exploding infinity, the PyTorch Adam optimizer defaults to an artificial "safe space": it completely zeroes out the recurrent weights, generating a static, dead flatline prediction everywhere to achieve a consistently sub-optimal (but stable) MSE.
+
+## The Literature Fix: Curriculum Learning & Multiple Shooting Constraints
+
+To solve this, leading state-of-the-art Neural ODE papers rely on two strict mathematical safeguards:
+1. **Continuous Curriculum Learning**: Rather than forcing the network to simulate out to $t=50$ straight on Epoch 1, we start by calculating the loss only on $t=1$. As the network stabilizes its local derivative paths, we gradually expand the BPTT error ceiling $t_{max}$ outwards towards 50 throughout the Epoch cycle.
+2. **Gradient Clipping**: Hard-clapping the backward gradient scalar max norm limits to physically prevent chaotic phase-spaces from exploding weight bounds during early unstable limits.
+
+## Proposed Changes
+
+### `src/train.py`
+I will rewrite the main engine loop to incorporate both safety constraints seamlessly:
+- **Gradient Clipping**: Injecting `torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)` right before `optimizer.step()`. This securely stops exploding gradients.
+- **Dynamic BPTT Curriculum Horizon**: Instead of performing `loss = MSELoss(preds, targets)` blindly across the entire sequence matrix, I will slice the horizon:
+  - `active_steps = max(2, int((epoch / epochs) * seq_len * 1.5))`
+  - The loss will compute specifically over `preds[:, :active_steps, :]`.
+  - By essentially starting at 1-step models and slowly bridging towards 50-step models organically during the run, the equations stabilize the core dynamics before being evaluated for long term drifting!
+
+## User Review Required
+> [!IMPORTANT]
+> The dynamic curriculum equation above allows the network to max out the full `sequence_length` constraint seamlessly around 66% of the way through the total `epochs`. Are you ready for me to modify the codebase with this Curriculum Growth algorithm to resurrect the phase fields?

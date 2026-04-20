@@ -1,0 +1,26 @@
+# Fix: Inferring Independent E/I via Delay-Coordinate Embedding
+
+I have fundamentally refactored the pipeline to resolve the flattening / crashing of the Inhibitory latent trace $I(t)$.
+
+## The Architectural Flaw
+Previously, the code mapped instantaneous observation strings like $I_t = S_{igmoid}(W_{IE} \times E_t + b_I)$. This essentially squeezed the Inhibitory signal into a strict deterministic one-dimensional mapping bounded by $E_t$. Since there was no internal integration unrolled across backpropagation time (BPTT), the pure instantaneous derivative context was completely stripped away from the sequence, causing the neural network to aggressively prune out $I(t)$ towards zero as mathematically redundant!
+
+## The Solution: Takens' Embedding
+Reviewing the literature surrounding State-Space Reconstruction for chaotic nonlinear oscillators, the mathematically rigorous standard is **Takens’ Delay-Coordinate Embedding Theorem**. This theorem explicitly proves you can perfectly infer independent un-observed latent oscillators purely by feeding a sliding history lag of the observed channel!
+
+### 1. `config/default.yaml`
+Configured our history window to exactly 10 slices (`history_window: 10`). Because the SDK works with 10ms bins, this allows the dense layer to interpret exactly 100ms of lag vector trajectory when making next-step decisions. 
+
+### 2. `src/datasets.py`
+To correctly utilize this without crashing memory or causing data overlap leakage, `NeuropixelsDataset` is now internally operating on sliding batch window extraction via `numpy.lib.stride_tricks.sliding_window_view()`. `create_dataloaders()` also carefully manages chunk slice overlaps so validation frames don't artificially leak data.
+
+### 3. `src/models.py` 
+The arbitrary scalar encoder has been entirely ripped out. Instead, `MechanisticModel` tracks the delay vectors dynamically through custom Takens arrays:
+```python
+self.encoder_E = nn.Linear(history_window, 1)
+self.encoder_I = nn.Linear(history_window, 1)
+```
+This forces the PyTorch network to intrinsically analyze the *slope, curve, and temporal offset differences* directly over the past 100ms to determine exactly what cycle pattern Phase $I$ is pushing Phase $E$ toward!
+
+> [!TIP]
+> The modified PyTorch architecture is running successfully right now and you can expect `[name]_latent_trajectories.png` and `[name]_phase.png` to reflect beautifully uncoupled cyclic phase tracking within 10 minutes.

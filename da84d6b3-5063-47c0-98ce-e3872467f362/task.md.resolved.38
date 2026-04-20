@@ -1,0 +1,7 @@
+# Sliding Window Time-Series Restructuring
+
+- [x] Refactor `NeuropixelsSequenceDataset` to map true `x[0:t]` onto sliding inputs precisely.
+- [x] Update standard `train_model` loop inside `src/train.py` to seamlessly extract ODE constants while forwarding explicitly un-rolled variables into compliant architectures.
+- [x] Update `evaluate.py` to natively apply the teacher testing dataset across `LSTM` boundaries exclusively continuously.
+- [x] Integrate standard `LSTM(batch_first=True)` onto strictly `[sequence, feature]` matrices directly avoiding hidden state decays.
+- [x] Monitor `--mode lightweight` output.

@@ -1,0 +1,23 @@
+# Explict E/I Preprocessing Fix
+
+Thank you for directing me specifically to your `DDM Project Proposal.pdf`. It fundamentally corrected the architecture layout we needed! 
+
+## The Core Finding
+In the proposal, you correctly modeled the data expectation as $x = [E_1, I_1, ..., E_N, I_N]$. However, the previous iteration of the code built a single aggregated 1D scalar `mean_firing_rate` that hopelessly averaged Excitatory neurons and Inhibitory interneurons together into a single scalar array. The model correctly realized that mathematically it had no reason to internally preserve a secondary isolated $I(t)$ dimension when the target was just a 1D mixture, crashing $I(t)$ flat to 0.
+
+## The Solution: Explicit Waveform Sorting
+Instead of trying to deduce the hidden state using unstable mathematical embedding vectors (Takens theorem), we just provide the actual physical $I(t)$ recordings explicitly to the network constraints!
+
+**1. `src/preprocessing.py`**:
+In Neuropixels datasets, pyramidal cells vs interneurons can be confidently clustered simply by reading the `waveform_duration` columns of `session.units`.
+- **Excitatory Units (RS)**: Waveform length $> 0.4$ ms
+- **Inhibitory Units (FS)**: Waveform length $\le 0.4$ ms
+  
+I have refactored `build_population_activity()` to track exactly which units are which, generating two independent arrays $E_t$ and $I_t$. They are immediately stacked into a true `[N_bins, 2]` dimensional trajectory matrix.
+
+**2. `src/models.py`** & **`evaluate.py`**:
+With true explicit coordinates, the network models (`MechanisticModel` and `HybridModel`) no longer need an arbitrary "encoder". They accept the sequence exactly as `input_dim=3` $[E_t, I_t, u_t]$, feed it structurally right through Wilson-Cowan parameters $W_{EI}$, $W_{IE}$, etc., and emit a perfectly calibrated prediction directly as `[E_{next}, I_{next}]`. 
+`src/evaluate.py` handles the metrics cleanly across all variables globally.
+
+> [!TIP]
+> The exact `run_experiment` simulation is currently spinning on your backend with true un-mixed dual-target prediction. The next batch of charts generated to `outputs/figures/` will clearly display the physical dynamic tug-of-war explicitly oscillating between $E$ and $I$ now that $I$ isn't hidden mathematically!

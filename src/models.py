@@ -85,6 +85,17 @@ class MechanisticModel(nn.Module):
         self.b_E = nn.Parameter(torch.tensor(0.0))
         self.b_I = nn.Parameter(torch.tensor(0.0))
 
+    def derivatives(self, x_curr, u_t):
+        E_curr = x_curr[:, 0:1]
+        I_curr = x_curr[:, 1:2]
+
+        S_E = self.activation_function(self.w_EE * E_curr - self.w_EI * I_curr + self.w_EU * u_t + self.b_E)
+        dE = -E_curr + S_E
+
+        S_I = self.activation_function(self.w_IE * E_curr - self.w_II * I_curr + self.w_IU * u_t + self.b_I)
+        dI = -I_curr + S_I
+        return dE, dI
+
     def step(self, x_curr, u_t):
         E_curr = x_curr[:, 0:1]
         I_curr = x_curr[:, 1:2]
@@ -92,11 +103,7 @@ class MechanisticModel(nn.Module):
         steps = 5
         dt_sub = self.dt / steps
         for _ in range(steps):
-            S_E = self.activation_function(self.w_EE * E_curr - self.w_EI * I_curr + self.w_EU * u_t + self.b_E)
-            dE = -E_curr + S_E
-            
-            S_I = self.activation_function(self.w_IE * E_curr - self.w_II * I_curr + self.w_IU * u_t + self.b_I)
-            dI = -I_curr + S_I
+            dE, dI = self.derivatives(torch.cat([E_curr, I_curr], dim=-1), u_t)
             
             E_curr = E_curr + dt_sub * dE
             I_curr = I_curr + dt_sub * dI
@@ -120,7 +127,10 @@ class MechanisticModel(nn.Module):
 
 class HybridModel(nn.Module):
     """
-    Wilson-Cowan mechanistic core + an MLP residual completely integrated via autoregressive loop.
+    Wilson-Cowan mechanistic core plus a recurrent residual correction.
+    When observed state history is available, the model predicts one-step-ahead
+    transitions from that observed state distribution consistently at both train
+    and eval time. Without history, it falls back to autoregressive rollout.
     """
     def __init__(self, dt=0.01, activation_function='sigmoid', residual_hidden_dims=[16], pretrained_mechanistic_path=None, *args, **kwargs):
         super().__init__()
@@ -131,16 +141,20 @@ class HybridModel(nn.Module):
             for param in self.mechanistic.parameters():
                 param.requires_grad = False
                 
-        
         hidden_dim = residual_hidden_dims[0]
         self.residual_lstm = nn.LSTMCell(input_size=5, hidden_size=hidden_dim) # E, I, U, dE_mech, dI_mech
+        self.hidden_norm = nn.LayerNorm(hidden_dim)
         self.residual_proj = nn.Linear(hidden_dim, 2)
         
-        self.alpha = nn.Parameter(torch.tensor(1.0)) # Learnable scaling, starting at 1.0
+        # Keep residual authority positive and bounded so the hybrid stays physics-first.
+        self.logit_alpha = nn.Parameter(torch.tensor(-1.5))
         
-        # Initialize projection very small so residual doesn't explode initially
+        # Initialize projection very small so residual starts as a gentle correction.
         nn.init.normal_(self.residual_proj.weight, std=0.01)
         nn.init.zeros_(self.residual_proj.bias)
+
+    def residual_scale(self):
+        return torch.sigmoid(self.logit_alpha)
         
     def step(self, x_curr, u_t, dE_res, dI_res):
         E_curr = x_curr[:, 0:1]
@@ -148,24 +162,17 @@ class HybridModel(nn.Module):
         
         steps = 5
         dt_sub = self.mechanistic.dt / steps
+        alpha = self.residual_scale()
         for _ in range(steps):
-            S_E = self.mechanistic.activation_function(
-                self.mechanistic.w_EE * E_curr - self.mechanistic.w_EI * I_curr + self.mechanistic.w_EU * u_t + self.mechanistic.b_E
-            )
-            dE_mech = -E_curr + S_E
+            dE_mech, dI_mech = self.mechanistic.derivatives(torch.cat([E_curr, I_curr], dim=-1), u_t)
             
-            S_I = self.mechanistic.activation_function(
-                self.mechanistic.w_IE * E_curr - self.mechanistic.w_II * I_curr + self.mechanistic.w_IU * u_t + self.mechanistic.b_I
-            )
-            dI_mech = -I_curr + S_I
-            
-            E_curr = E_curr + dt_sub * (dE_mech + self.alpha * dE_res)
-            I_curr = I_curr + dt_sub * (dI_mech + self.alpha * dI_res)
+            E_curr = E_curr + dt_sub * (dE_mech + alpha * dE_res)
+            I_curr = I_curr + dt_sub * (dI_mech + alpha * dI_res)
         
         x_next = torch.cat([E_curr, I_curr], dim=-1)
         
-        # Calculate L2 magnitude of raw residuals to regularize in training!
-        res_mag = torch.mean(dE_res**2 + dI_res**2)
+        # Track correction size so training can discourage the residual from taking over.
+        res_mag = torch.mean((alpha * dE_res)**2 + (alpha * dI_res)**2)
         
         return x_next, E_curr, I_curr, res_mag
         
@@ -181,50 +188,20 @@ class HybridModel(nn.Module):
         
         for t in range(seq_len):
             u_t = u_seq[:, t, :]
-            
-            # Predict mechanics blindly for features
-            E_base = x_curr[:, 0:1]
-            I_base = x_curr[:, 1:2]
-            S_E_base = self.mechanistic.activation_function(
-                self.mechanistic.w_EE * E_base - self.mechanistic.w_EI * I_base + self.mechanistic.w_EU * u_t + self.mechanistic.b_E
-            )
-            dE_mech_base = -E_base + S_E_base
-            
-            S_I_base = self.mechanistic.activation_function(
-                self.mechanistic.w_IE * E_base - self.mechanistic.w_II * I_base + self.mechanistic.w_IU * u_t + self.mechanistic.b_I
-            )
-            dI_mech_base = -I_base + S_I_base
-            
-            # Autoregressive teacher-forcing transition: scheduled sampling
-            # Start by relying on true history (when available), but probabilistically fall back to model predictions
-            # so the model learns how to recover from its own drift!
-            use_true = False
-            if x_seq is not None:
-                if self.training:
-                    # 50% chance to reset to true history to prevent extreme divergence during BPTT
-                    if torch.rand(1).item() < 0.5:
-                        use_true = True
-                else:
-                    # At inference, do not cheat blindly! Autoregressive!
-                    pass
-            
-            if use_true:
-                x_in_lstm = x_seq[:, t, :]
-                x_curr_integrated = x_seq[:, t, :] # Correct the drift for ODE too
-            else:
-                x_in_lstm = x_curr
-                x_curr_integrated = x_curr
-                
-            # Let the LSTM observe the current physics state & momentum!
-            inputs = torch.cat([x_in_lstm, u_t, dE_mech_base, dI_mech_base], dim=-1)
+            # Align train and eval around the actual task: current observed state -> next state.
+            # If an observed history window is provided, use it consistently. Otherwise roll out.
+            x_input = x_seq[:, t, :] if x_seq is not None else x_curr
+
+            dE_mech_base, dI_mech_base = self.mechanistic.derivatives(x_input, u_t)
+            inputs = torch.cat([x_input, u_t, dE_mech_base, dI_mech_base], dim=-1)
             h_t, c_t = self.residual_lstm(inputs, (h_t, c_t))
-            res_out = self.residual_proj(h_t)
+            res_out = self.residual_proj(self.hidden_norm(h_t))
             
-            # bounded residual scaling prevents explosive divergence
+            # Bounded residuals keep the neural correction interpretable and stable.
             dE_res = torch.tanh(res_out[:, 0:1])
             dI_res = torch.tanh(res_out[:, 1:2])
             
-            x_next, E_next, I_next, res_mag = self.step(x_curr_integrated, u_t, dE_res, dI_res)
+            x_next, E_next, I_next, res_mag = self.step(x_input, u_t, dE_res, dI_res)
             preds.append(x_next)
             E_seq.append(E_next)
             I_seq.append(I_next)

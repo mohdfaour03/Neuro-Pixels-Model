@@ -1,0 +1,6 @@
+# Refactoring BPTT Decay Models
+
+- [ ] Update `LinearBaseline` in `src/models.py` to simulate via explicit `dt` integration
+- [ ] Update `MLPBaseline` in `src/models.py` to simulate via explicit `dt` integration
+- [ ] Refactor `evaluate_model` inside `src/evaluate.py` to slice overlapping 50-step fixed horizon rollouts rather than unbounded autonomous 5000-step chaotic drifts
+- [ ] Execute `run_experiment.py` and verify trajectory collapse anomaly is mathematically resolved!

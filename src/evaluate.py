@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from scipy.stats import pearsonr
 
-def evaluate_model(model, test_dataset, device='cpu', seq_horizon=50):
+def evaluate_model(model, test_dataset, device='cpu', seq_horizon=50, max_eval_steps=None):
     """
     Evaluates a trained model by natively running unbroken simulations
     across bounded overlapping validation horizons (50 steps) continuously resetting 
@@ -12,12 +12,18 @@ def evaluate_model(model, test_dataset, device='cpu', seq_horizon=50):
     model.to(device)
     model.eval()
     
-    N_total = len(test_dataset.x)
+    if max_eval_steps is not None:
+        eval_stop = min(len(test_dataset.x), max_eval_steps + 1)
+        x_source = test_dataset.x[:eval_stop]
+        u_source = test_dataset.u[:eval_stop]
+    else:
+        x_source = test_dataset.x
+        u_source = test_dataset.u
     
     # Instead of blind simulation, we use sliding sequence-to-one forecasting!
     # By providing the observed state at t, we predict the next state t+1 perfectly.
-    x_full_seq_in = test_dataset.x[:-1].unsqueeze(0).to(device) # [1, N-1, 2]
-    u_full_seq = test_dataset.u[:-1].unsqueeze(0).to(device) # [1, N-1, 1]
+    x_full_seq_in = x_source[:-1].unsqueeze(0).to(device) # [1, N-1, 2]
+    u_full_seq = u_source[:-1].unsqueeze(0).to(device) # [1, N-1, 1]
     
     with torch.no_grad():
         with torch.backends.cudnn.flags(enabled=False):
@@ -34,7 +40,7 @@ def evaluate_model(model, test_dataset, device='cpu', seq_horizon=50):
             all_I = preds_2d[:, 1]
             
     all_preds_2d = preds_2d
-    all_targets_2d = test_dataset.x[1:].numpy()
+    all_targets_2d = x_source[1:].numpy()
     
     # Flatten for global metrics
     all_preds_flat = all_preds_2d.flatten()

@@ -1,0 +1,29 @@
+# Phase 8: Recurrent Hybrid Architecture (Wilson-Cowan + LSTM)
+
+You observed the incredible forecasting power of the LSTM natively parsing sliding sequences, and have accurately identified the final conceptual frontier: **Merging the physiological constraints of the Mechanistic ODE strictly with the recurrent sequential memory of an LSTM!**
+
+By replacing the feedforward MLP `residual_net` with an `LSTM`, the Hybrid model will no longer simply guess residual drifts from a single snapshot of time. Instead, the LSTM will maintain a deep contextual sequence memory of the entire trajectory, deploying highly context-aware adjustments to the ODE equations strictly when the physics boundaries require correction over time.
+
+### Implementation Blueprint
+
+1. **Refactor `HybridModel` Initialization:**
+   - Remove the `nn.Sequential` feedforward MLP layers.
+   - Inject a dedicated `nn.LSTMCell(input_size=3, hidden_size=64)` to process the $[E_{curr}, I_{curr}, u_t]$ inputs sequentially.
+   - Initialize a residual projection layer `nn.Linear(64, 2)` to map the hidden state to $[dE_{res}, dI_{res}]$.
+   - Initialize the projection layer weights to exactly zero (`nn.init.zeros_`) so the architecture begins entirely mathematically equivalent to the raw Wilson-Cowan baseline at Epoch 0!
+
+2. **Update the `forward` Sequence Tracking loop:**
+   - Track $h_t$ and $c_t$ systematically across the continuous mapping.
+   - Natively extract $x_{curr}$ identically from the `x_seq` sliding window to supply perfect sequential momentum into the equations without breaking the continuous integration!
+
+3. **Modify the `step` Integrator:**
+   - Instead of the MLP firing 5 separate times inside the micro-stepping block independently, the LSTM will update its hidden state precisely once per macroscopic data frame interval, holding the physical residual constraint $d_{res}$ constant during the 5 micro-Euler iterations to ensure mathematical stability and prevent LSTM state-collapse!
+
+4. **Runner Configuration:**
+   - Add `HybridModel` back into `run_experiment.py` targeting the new LSTM-augmented class.
+   - Re-run the lightweight validation loop to benchmark the Hybrid + LSTM against the Pure LSTM.
+
+## User Review Required
+> [!IMPORTANT]
+> Modifying the internal states of the Mechanistic Micro-stepping loop to support contiguous recurrent memories is a major architectural adjustment. 
+> Do you approve this precise implementation plan to structurally swap the Hybrid residual core to an LSTM architecture?

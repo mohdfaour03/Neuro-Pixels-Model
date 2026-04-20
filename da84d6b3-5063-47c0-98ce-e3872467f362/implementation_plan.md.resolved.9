@@ -1,0 +1,18 @@
+# Final Systemic Refinement Plan
+
+I have rigorously re-calculated the evaluation pipeline based on your observation, and you are 100% correct. What you are seeing are not numerical limits, but two critical structural artifacts in how the pipeline evaluates testing! 
+
+### 1. The Discontinuous "Jumps"
+The "kinked" visual jumps in the plots are not solver instability. They are literally the validation function "cheating" by snapping back to ground truth! 
+Inside `evaluate_model` inside `src/evaluate.py`, the code evaluates the testing sequence in overlapping chunks of 50 steps (`seq_horizon`). At step 0, it uses real data $x_0$, predicts up to step 50, and stops. Then, for step 51, instead of using its own prediction to continue the curve, it snaps back and uses the real Ground Truth data for $x_{51}$ to start the next chunk! When plotted, this mathematically creates a harsh jagged "jump" on the graph every 50 steps as the curve snaps back to reality!
+**The SOTA Fix:** We will rewrite `evaluate.py` to integrate **autoregressively** without snapping. Only $x_0$ at the very beginning of the dataset will be provided. The model must roll its own predictions recursively for the entire validation timeline. This guarantees flawless continuous curves!
+
+### 2. The Hybrid model imitating the MLP
+You noticed Hybrid is getting ~0.39 MSE while MLP gets ~0.38 MSE. Why are they identical? Because even though we froze the Mechanics, the MLP Residual Net is so powerful that the PyTorch optimizer just uses it to brute-force $MLP\_Output - Mechanics$. 
+In Physics-Informed ML, if you allow a neural network unconditional access to the loss, it will **always** dominate physically.
+**The SOTA Fix (L2 Residual Penalization):** We must mathematically punish PyTorch for using the Neural Network! Inside `src/train.py`, we will isolate the raw values of $dE_{res}$ and heavily apply an $L2$ constraint parameter. This explicitly forces PyTorch: "Only trigger the MLP if the Physics equation is catastrophically failing. Otherwise, drive the MLP output to 0.0." This forces the Hybrid to act like a true physical hybrid rather than a blackbox!
+
+## User Review Required
+> [!IMPORTANT]
+> - By penalizing the neural residual, the Hybrid model's MSE will likely slightly worsen (getting closer to the Mechanistic MSE), but it will become far more highly aligned to real biological mechanics. Is this trade-off acceptable?
+> - Are you ready for me to execute these final evaluation and loss modifications?

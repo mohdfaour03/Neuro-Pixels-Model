@@ -55,13 +55,20 @@ def train_model(model, train_loader, val_loader, config, save_path, device='cpu'
             active_steps = max(2, int((epoch / epochs) * seq_len_total * 1.5))
             active_steps = min(active_steps, seq_len_total)
             
-            loss = criterion(preds[:, :active_steps, :], target[:, :active_steps, :])
+            pred_slice = preds[:, :active_steps, :]
+            target_slice = target[:, :active_steps, :]
+            loss = criterion(pred_slice, target_slice)
+
+            # Penalize flat or phase-lagged solutions by matching local trajectory changes too.
+            if active_steps > 1:
+                pred_delta = pred_slice[:, 1:, :] - pred_slice[:, :-1, :]
+                target_delta = target_slice[:, 1:, :] - target_slice[:, :-1, :]
+                loss = loss + 0.25 * criterion(pred_delta, target_delta)
             
-            # L2 Residual Magnitude Penalization to prevent MLP Domination
-            # This mathematically isolates and trains strictly the Symbolic differential drift!
+            # Keep the residual small enough to stay hybrid, but not so harshly regularized
+            # that it collapses back to the mechanistic attractor.
             if hasattr(model, 'last_residual_magnitude'):
-                # Reduced penalty allows the LSTM to confidently adjust the ODE
-                loss += 0.001 * (model.last_residual_magnitude / active_steps)
+                loss += 0.0001 * (model.last_residual_magnitude / active_steps)
                 
             loss.backward()
             
@@ -90,6 +97,10 @@ def train_model(model, train_loader, val_loader, config, save_path, device='cpu'
                     preds = out
                     
                 loss = criterion(preds, target)
+                if target.size(1) > 1:
+                    pred_delta = preds[:, 1:, :] - preds[:, :-1, :]
+                    target_delta = target[:, 1:, :] - target[:, :-1, :]
+                    loss = loss + 0.25 * criterion(pred_delta, target_delta)
                 epoch_val_loss += loss.item() * x_seq_in.size(0)
                 
         epoch_val_loss /= len(val_loader.dataset)

@@ -1,0 +1,36 @@
+# Goal: Extract True E and I Traces from Neuropixels Data
+
+I read the attached **DDM Project Proposal** thoroughly. Thank you for pointing me there, it immediately clarifies the discrepancy!
+
+In the proposal, you explicitly define the data matrix as $x = [E_1, I_1, \dots, E_N, I_N]$. This means your model is designed under the assumption that the training data physically provides *both* the Excitatory and Inhibitory firing rates explicitly as a two-dimensional target vector for the neural region. 
+
+However, right now, our `src/preprocessing.py` is averaging the spikes from **all neurons (both E and I mixed together)** into a single, scalar 1D firing rate array `x_t`. Because the target `x_t` was just a single scalar average, the model had no mathematical reason to maintain a separate $I(t)$ variable under the hood—it could minimize the loss purely by routing everything through $E(t)$ and silencing $I(t)$ to zero!
+
+To mathematically align the code with your project proposal, we don't need complex delayed history embedding vectors. We need to split the ground truth data at the source!
+
+## Proposed Changes
+
+### `src/preprocessing.py`
+Neuropixels `session.units` metadata includes spike waveform properties. Specifically, it is standard practice to separate putative excitatory neurons from inhibitory interneurons using their `waveform_duration`:
+- **Excitatory (Regular Spiking)**: broader spikes typically $> 0.4$ ms duration.
+- **Inhibitory (Fast Spiking)**: narrower spikes typically $< 0.4$ ms duration.
+
+I will modify `build_population_activity` to filter unit IDs by this duration threshold and calculate two separate histograms over the bins. `x_t` will be returned as an $N \times 2$ array.
+
+### `config/default.yaml`
+- Revert `history_window` back to `1` (we no longer need to infer $I(t)$ using delay equations since we directly observe it!).
+- Update `input_dim` variables.
+
+### `src/models.py`
+Since `x_t` is now natively `[E, I]`, The `MechanisticModel` and `HybridModel` will take an `input_dim=2`.
+- We can completely remove the encoder layers! 
+- $E_t = x_{t}[0]$ and $I_t = x_{t}[1]$
+- The model directly simulates one Wilson-Cowan dt step, and the output `x_next` prediction is exactly `[E_next, I_next]`!
+- `LinearBaseline` and `MLPBaseline` will naturally accept shape `[E, I, u]` and output shape `[E_next, I_next]`.
+
+### `src/evaluate.py`
+We will evaluate the test performance of the Excitatory predictions and Inhibitory predictions separately (computing $MSE_E$ and $MSE_I$).
+
+## User Review Required
+> [!IMPORTANT]
+> The threshold for distinguishing Fast-Spiking (Inhibitory) vs Regular-Spiking (Excitatory) neurons using Neuropixels waveform duration is commonly set around **0.4 ms**. Does this align with your literature review for the Allen Brain Observatory dataset, or is there another predefined column or threshold you'd prefer to use to sort the `session.units` dataframe?

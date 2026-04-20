@@ -1,0 +1,18 @@
+# Transition to BPTT Trajectory Generation
+
+We have successfully rebuilt the simulation pipeline to evaluate full trajectory stability instead of just simple, heavily autocorrelated 1-step predictions. This upgrade separates standard time-series regression from true physics discovery!
+
+## Mathematical Fixes
+
+**1. Sequential Data Chunking:**
+`src/datasets.py` no longer spits out single points. The `NeuropixelsSequenceDataset` slices the recording session into contiguous 500ms sequences. When requested, it returns a 50-bin input stimulus sequence block, paired strictly with the target 50-bin ground truth sequence.
+
+**2. Internal Recursive Simulation loop:**
+We updated `src/models.py` fundamentally. Instead of passing through static feed-forward steps, all models (`Mechanistic`, `Hybrid`, and the Baselines) are fed exactly **one initial state** ($x_0$) alongside the future stimulus constraint. 
+Inside the model's `.forward()`, a PyTorch autoregressive looping structure repeatedly steps its own output dynamically backward through its own layers to artificially forecast exactly what will happen 50 steps deep!
+
+**3. Global Sequence Assessment:**
+`src/evaluate.py` was structurally refitted to evaluate completely disconnected unrolled chunks flawlessly without crashing Matplotlib shape constraints. It assesses prediction metrics based *only* on the stability of the long-term prediction. Even better, it inherently tests inference stability over the **entire test array length sequentially**, perfectly replicating actual simulation conditions.
+
+> [!WARNING]
+> By eliminating the 1-step mapping, the Neural Network loses precision accuracy guarantees. When you inspect the new `MSE` and graphs, they will look significantly wilder (and likely worse linearly) than the previous metrics. However, this generated error represents the true system-level instability limit cycles that the Symbolic Regression engine needs to fix natively!

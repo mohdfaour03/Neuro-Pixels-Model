@@ -30,6 +30,12 @@ def main():
         print("Running in LIGHTWEIGHT mode. Overriding epochs to 5 and seq_len to 15.")
         config['training']['epochs'] = 5
         config['training']['sequence_length'] = 15
+        if args.model == 'HybridModel':
+            print("HybridModel lightweight override: using 2 epochs, seq_len 15, batch_size 4096 for a fast stabilization pass.")
+            config['training']['epochs'] = 2
+            config['training']['sequence_length'] = 15
+            config['training']['batch_size'] = 4096
+            config['training']['early_stopping_patience'] = 2
         
     set_seed(config['project']['seed'])
     
@@ -127,11 +133,6 @@ def main():
             return
     stored_preds = {}
     
-    # test_dataset evaluates globally natively. Provide continuous test_time sequence.
-    # N_steps will be len(test_dataset.x) - 1 inside evaluate_model
-    test_time = test_dataset.time[1 : len(test_dataset.x)]
-    test_u_t = test_dataset.u.numpy().flatten()[:len(test_time)]
-    
     for name, model in models_to_run.items():
         save_path = os.path.join(out_dir, 'models', f"{name}.pth")
                     
@@ -144,9 +145,21 @@ def main():
         plot_loss_curves(train_losses, val_losses, name, 
                          save_path=os.path.join(out_dir, 'figures', f"{name}_loss_curves.png"))
         
-        metrics, all_preds, all_targets, all_E, all_I = evaluate_model(trained_model, test_dataset, device)
+        eval_limit = None
+        if args.mode == 'lightweight' and name == 'HybridModel':
+            eval_limit = 5000
+
+        metrics, all_preds, all_targets, all_E, all_I = evaluate_model(
+            trained_model,
+            test_dataset,
+            device,
+            max_eval_steps=eval_limit
+        )
         results[name] = metrics
         stored_preds[name] = all_preds
+
+        test_time = test_dataset.time[1 : 1 + len(all_preds)]
+        test_u_t = test_dataset.u.numpy().flatten()[:len(test_time)]
         
         # 1. Overlay Plot & Stimulus Alignment
         plot_predictions(

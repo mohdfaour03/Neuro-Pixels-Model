@@ -38,4 +38,4 @@ models:
     observation_model: E_only # E_only or linear_combination
     regularization_strength: 0.001
   hybrid:
-    residual_hidden_dims: [16]
+    residual_hidden_dims: [32]

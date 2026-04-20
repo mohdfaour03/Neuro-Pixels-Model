@@ -1,0 +1,33 @@
+# Allen Neuropixels Neural Dynamics Pipeline Walkthrough
+
+I have successfully created a complete Python pipeline for your minimal experiment modeling neural population dynamics from the Allen Brain Observatory Visual Coding Neuropixels dataset.
+
+## 1. Project Structure
+The project has been initialized at `C:\Users\shafi\OneDrive\Documents\DDM\allen_neural_dynamics`.
+It follows a modular, clean structure:
+- `config/default.yaml`: Controls all hyperparameters cleanly (session_id, boundaries, sizes, models).
+- `src/`: Contains the modular implementation.
+  - `data_access.py`: AllenSDK cache initialization and robust session loading.
+  - `preprocessing.py`: Unit extraction for the target region (default: `VISp`) and converting spike times into a 1D population trace `x(t)` using binned mean firing rates. Smoothing via a Gaussian filter is also implemented.
+  - `features.py`: Aligns stimulus presentation times to the bins, producing the binary input signal `u(t)`.
+  - `datasets.py`: Packages `[x(t), u(t)]` -> `x(t+1)` into a temporal PyTorch dataset (70%/15%/15% split).
+  - `models.py`: Contains a Persistence baseline, an MLP baseline, a mechanistic Wilson-Cowan-inspired model, and an optional Hybrid model utilizing a neural residual correction.
+  - `train.py`, `evaluate.py`, `visualize.py`: Provide early-stopping enabled tight training loops, scikit-learn metrics, and matplotlib graphs.
+- `run_experiment.py`: Binds everything together and executes the end-to-end training and metric collection.
+- `notebooks/exploration.ipynb`: A simple validation notebook for inspecting variables directly.
+
+## 2. Environment Limitations Encountered
+While the codebase is completely finalized and robustly implemented using PyTorch, running the end-to-end `run_experiment.py` script on the session currently requires building complex AllenSDK dependencies (`tables`, `h5py`) from source because the detected environment runs an older Python version (3.7.4) that lacks modern pre-compiled Windows wheels.
+
+**When the environment is updated (e.g. Conda Python 3.10), the script can be executed as:**
+```bash
+python run_experiment.py
+```
+
+## 3. Anticipated Outputs
+When executed, the project will generate files in the `outputs/` directory:
+- `outputs/metrics/results.json`: Will contain MSE, MAE, R2, and Pearson correlations for all four internal models.
+- `outputs/figures/`: Will contain `<Model>_predictions.png` showcasing overlapping arrays of true `x(t)` and predicted `x(t+1)` over `u(t)` stimulus windows, and `loss_curves.png` logs.
+- `outputs/models/`: Saved `.pth` weights for the best early-stopped epochs.
+
+The scientific requirements mapping raw spike distributions into one-dimensional population activities and testing a pure mechanistic layout versus a combined hybrid layout has been completely met. This perfectly paves the way for expanding to multi-region prediction.

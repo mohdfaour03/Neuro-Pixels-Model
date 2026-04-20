@@ -1,0 +1,64 @@
+# Implementation Plan: Phase 2 - E/I Latent Structure and Dynamical Evaluation
+
+This plan outlines the extension of the baseline minimal experiment into a full Wilson–Cowan E/I population model with comprehensive dynamical evaluation.
+
+## User Review Required
+> [!IMPORTANT]
+> - Sequence rollout vs One-step: The current dataset natively supports exactly 1-step prediction. I propose we keep training as 1-step prediction (to maintain Phase 1 simplicity and guarantee stability), but for evaluation we examine the output `E(t)` and `I(t)` variables to compute dynamical metrics and Phase Plots. Is this acceptable, or would you strictly prefer an unrolled temporal backpropagation for actual training?
+> - `Linear_combination` defaults: If `observation_model: "linear_combination"`, we will output $x_{hat} = w_e E + w_i I$.
+
+## Proposed Changes
+
+### Configuration (`config/default.yaml`)
+#### [MODIFY] `config/default.yaml`
+- Add: `use_ei_model: true` and `use_residual: true` toggles.
+- Add: `observation_model: "E_only"` (options: `"E_only"`, `"linear_combination"`).
+- Add: `activation_function: "sigmoid"` (options: `"sigmoid"`, `"tanh"`).
+- Add: `regularization_strength: 0.001` (to constrain $E, I$ bounds smoothly if required).
+
+---
+### Codebase (`src/`)
+
+#### [MODIFY] `src/models.py`
+- Modify `MechanisticModel`:
+  - Dynamically choose `torch.sigmoid` or `torch.tanh` based on config.
+  - Revamp `forward(x_t, u_t)` to track and return `(x_next, E_next, I_next)` explicitly.
+  - Route the readout directly via the specified `observation_model`.
+- Modify `HybridModel`:
+  - Enhance the residual MLP block.
+  - Return `(x_next, E_next, I_next, residual_strength)`.
+- Add `LinearBaseline` as requested in Part 5.
+
+#### [MODIFY] `src/train.py`
+- Catch the new tuple tuple-outputs: `preds, E, I = model(x_t, u_t)`.
+- Apply `MSELoss` structurally on `preds`.
+- Optional: Apply `L2 regularization` on parameters or bounds to `E` and `I` if `regularization_strength > 0` is set.
+
+#### [MODIFY] `src/evaluate.py`
+- Modify `evaluate_model` to collect `E_t` and `I_t` outputs.
+- Track new Prediction Metrics (already have MSE, MAE, R2, Pearson).
+- Create `temporal_alignment_quality`: computes max cross-correlation and best lag (e.g. up to $\pm 100$ bins).
+- Create `dynamics_quality`: compute derivative consistency `pearsonr(dx_true, dx_hat)`.
+- Create `stability_metrics`: `min`, `max`, `variance` arrays for output.
+- Log these metrics to `outputs/metrics/results.json`.
+
+#### [MODIFY] `src/visualize.py`
+- **Plot 1**: Enhance Time Series Overlay.
+- **Plot 2**: Same-timeline execution of $u(t)$, $x_{true}$, $x_{hat}$.
+- **Plot 3** [NEW]: Phase Plot ($E_t$ vs $I_t$) showing a snapshot of the learned vector field or traversed trajectory.
+- **Plot 4** [NEW]: Residual Effect (Overlapped trace of WC pure vs WC+Residual).
+- **Plot 5** [NEW]: Error over time $|x_{hat} - x_{true}|$.
+
+#### [MODIFY] `run_experiment.py`
+- Connect new conditional executions (skipping models if disabled in config).
+- Collect tuples, evaluate all metrics cleanly.
+- Export all of the new robust metric graphs.
+
+## Verification Plan
+### Automated Tests
+- Run `run_experiment.py` and inspect `outputs/figures/phase_plot.png` directly. 
+- Ensure `results.json` features keys like `cross_corr`, `lag`, `derivative_consistency`, and `variance`.
+
+### Manual Verification
+- Examine Phase spaces to confirm realistic E/I coupling (spiraling, bounded cycles, or fixed points) rather than random noise.
+- Check if WC+Residual reduces lag & MSE over pure WC representation.

@@ -11,3 +11,4 @@ data/raw/session_715093703/session_715093703.nwb
 .env.development
 .env.test
 .env.production
+.codex
