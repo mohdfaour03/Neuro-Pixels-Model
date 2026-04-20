@@ -1,6 +1,0 @@
-# High-Capacity SOTA Sequence Models
-
-- [x] Implement `LatentCTRNN` in `src/models.py`: Natively constructs a 64-dimensional biological continuous-time RNN with 5x Euler micro-stepping, projecting to $E$ and $I$.
-- [x] Implement `LSTMBaseline` in `src/models.py`: Natively configures an autoregressive LSTM tracker mapping state and stimulus sequentially to guarantee minimum continuous MSE bounds.
-- [x] Refactor `run_experiment.py` to map these models dynamically into the evaluation pipeline alongside baselines!
-- [x] Execute background `--mode lightweight` to visually confirm extreme continuous curve matching limits.

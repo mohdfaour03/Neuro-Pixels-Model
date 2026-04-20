@@ -1,7 +1,0 @@
-# Numerical Optimization & Pre-Training
-
-- [x] Implement `Micro-Stepping` inside `MechanisticModel.step` and `HybridModel.step` locally (`dt / 5`).
-- [x] In `HybridModel`, define an `__init__` argument `pretrained_mechanistic`. If provided, load those physical state-dict parameters exactly.
-- [x] In `HybridModel`, loop strictly over internal physics parameters securely and freeze them via `.requires_grad = False`, isolating the gradient to the MLP.
-- [x] Configure `run_experiment.py` to sequentially route the trained `Mechanistic` path automatically into the `Hybrid` constructor! 
-- [x] Re-run the lightweight parameter diagnostic command strictly to assure pipeline is smooth and hybrid loss evaluates differentially!

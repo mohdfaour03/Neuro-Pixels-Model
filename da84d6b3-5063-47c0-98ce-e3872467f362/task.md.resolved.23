@@ -1,7 +1,0 @@
-# BPTT Rollout Transition
-
-- [ ] Add `sequence_length: 50` to `config/default.yaml`
-- [ ] Migrate `src/datasets.py` to chunk `x_t` vectors cleanly into `[seq_len, 2]` arrays
-- [ ] Rewrite all models in `src/models.py` to include an autoregressive `for` loop that recursively rolls out `x_t` natively
-- [ ] Update `evaluate.py` to seamlessly flatten and calculate the global trajectory sequences against the ground truth
-- [ ] Ensure shapes array accurately in `src/train.py`, test the execution to confirm the loss backward-flows efficiently over all iterations

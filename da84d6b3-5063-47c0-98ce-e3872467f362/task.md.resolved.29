@@ -1,8 +1,0 @@
-# Architectural Optimizations
-
-- [ ] Add `tqdm` to `requirements.txt`
-- [ ] Overhaul `src/models.py`: replace `nn.ReLU` with `nn.SiLU`, apply zero intialization to `HybridModel` residual projection layer
-- [ ] Optimize `src/datasets.py`: Pre-load entire continuous target dataset directly onto `.to(device)`
-- [ ] Optimize `config/default.yaml`: Upgrade `batch_size: 512`
-- [ ] Wrap `src/train.py` inside real-time `tqdm` loops for dynamic UI progress 
-- [ ] Update `run_experiment.py`: Add `argparse` with `--mode lightweight/heavyweight` and live tracking console outputs

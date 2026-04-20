@@ -1,7 +1,0 @@
-{
-  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary": "Plan to fix HybridModel collapse by aligning autoregressive sequences, adding alpha gating, and tuning integration limits.",
-  "updatedAt": "2026-04-19T12:16:42.071841500Z",
-  "version": "13",
-  "requestFeedback": true
-}

@@ -1,8 +1,0 @@
-# Implement Explicit E/I Population Preprocessing
-
-- [ ] Modify `config/default.yaml` to revert `history_window` to `1`
-- [ ] Update `src/preprocessing.py` to filter units by `waveform_duration` (threshold 0.4ms) and create an $N \times 2$ array for $x_t$
-- [ ] Revert `src/datasets.py` to single-step logic (no sliding window required natively)
-- [ ] Update `src/models.py` to natively process `input_dim=3` (`E, I, u`) and remove encoders
-- [ ] Update `run_experiment.py` and `evaluate.py` to expect and calculate metrics for 2D outputs
-- [ ] Run `run_experiment.py` to verify true uncoupled visualization

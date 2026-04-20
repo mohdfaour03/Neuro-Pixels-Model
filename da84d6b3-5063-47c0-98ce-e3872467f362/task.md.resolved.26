@@ -1,5 +1,0 @@
-# Stabilizing BPTT Rollout
-
-- [x] Implement Gradient Norm Clipping (`max_norm=1.0`) in `src/train.py` optimizer step
-- [x] Implement epoch-based `curriculum_steps` slicing to progressively grow the MSE trajectory horizon
-- [x] Run `run_experiment.py` and verify trajectory collapse has resolved

@@ -1,8 +1,0 @@
-# Hybrid LSTM Architecture Execution
-
-- [ ] Re-write `HybridModel.__init__` in `src/models.py` to define `nn.LSTMCell` and `nn.Linear` projection.
-- [ ] Initialize the final projection weights/biases to purely `0.0`.
-- [ ] Modify `HybridModel.forward` to unpack `x_seq` optimally and loop standard track states `h_t`, `c_t`. 
-- [ ] Reroute `dE_res` and `dI_res` out from LSTM macroscopic variables into the `step()` micro-loop seamlessly.
-- [ ] Reconfigure `run_experiment.py` to ensure `HybridModel` executes in alongside the other benchmark targets.
-- [ ] Execute continuous `--mode lightweight` sequence. 

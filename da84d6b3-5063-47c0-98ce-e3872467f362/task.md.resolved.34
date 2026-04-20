@@ -1,6 +1,0 @@
-# Autoregressive Validation & Residual Penalization
-
-- [x] Re-write `evaluate_model` inside `src/evaluate.py` to recursively generate a continuous prediction from exactly $x_0$ down the entire sequence without ground-truth snapping.
-- [x] Implement an $L2$ constraint calculation onto the `residual_net` outputs inside `HybridModel.forward()` natively and return it to the optimizer loop!
-- [x] Add the `residual_loss` scale multiplier into `src/train.py` during `loss.backward()`.
-- [x] Run `--mode lightweight` to visually confirm seamless limit-cycle plotting boundaries!
