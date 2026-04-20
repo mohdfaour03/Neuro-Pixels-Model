@@ -1,4 +1,13 @@
-allen_neural_dynamics/data/raw/session_715093703/session_715093703.nwb
-WC_UDE_Colab.ipynb
-DDM Project Proposal.pdf
-project_proposal.txt
+data/raw/session_715093703/session_715093703.nwb
+.gitignore
+.ipynb_checkpoints/
+.vscode/
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.development
+.env.test
+.env.production
