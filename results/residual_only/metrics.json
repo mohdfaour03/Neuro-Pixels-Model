@@ -1,0 +1,174 @@
+{
+  "best_validation": {
+    "best_epoch": 2,
+    "best_validation_mse": 0.01559827383607626,
+    "train_total_last": 0.05736464262008667,
+    "train_data_last": 0.05736454203724861,
+    "train_physics_last": 0.0,
+    "train_dynamic_last": 0.0,
+    "train_residual_reg_last": 2.2345226113884564e-08,
+    "train_residual_smoothness_last": 4.7791410828779135e-09,
+    "validation_last": 0.01559827383607626
+  },
+  "splits": {
+    "train": {
+      "mse": 0.03711593523621559,
+      "mae": 0.1582431048154831,
+      "mean_residual_to_wc_ratio": 52109.0546875,
+      "r2": {
+        "VISal": {
+          "prediction": -1.4160757899771204
+        },
+        "VISl": {
+          "prediction": -4.7219514840170556
+        },
+        "VISp": {
+          "prediction": -2.4250010950259693
+        },
+        "VISpm": {
+          "prediction": -0.3374905062755156
+        }
+      },
+      "per_region_residual_stats": {
+        "VISal": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 0.000103062491689343,
+          "mean_abs_residual_I": 0.0002179410366807133,
+          "mean_ratio": 24860.521484375,
+          "max_ratio": 65186.2421875
+        },
+        "VISl": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 9.577054879628122e-05,
+          "mean_abs_residual_I": 0.00021947978530079126,
+          "mean_ratio": 24733.00390625,
+          "max_ratio": 65163.1796875
+        },
+        "VISp": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 6.0918155213585123e-05,
+          "mean_abs_residual_I": 0.00027248894912190735,
+          "mean_ratio": 28739.833984375,
+          "max_ratio": 63536.95703125
+        },
+        "VISpm": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 7.536631892435253e-05,
+          "mean_abs_residual_I": 0.0002345156535739079,
+          "mean_ratio": 25495.740234375,
+          "max_ratio": 53529.2890625
+        }
+      }
+    },
+    "validation": {
+      "mse": 0.01559827383607626,
+      "mae": 0.09511450678110123,
+      "mean_residual_to_wc_ratio": 40986.19921875,
+      "r2": {
+        "VISal": {
+          "prediction": -0.047952717623356955
+        },
+        "VISl": {
+          "prediction": -0.20323321893761315
+        },
+        "VISp": {
+          "prediction": 0.012409783424356835
+        },
+        "VISpm": {
+          "prediction": -0.025720829969238412
+        }
+      },
+      "per_region_residual_stats": {
+        "VISal": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 2.657321238075383e-05,
+          "mean_abs_residual_I": 0.0001858952164184302,
+          "mean_ratio": 18947.638671875,
+          "max_ratio": 46672.30859375
+        },
+        "VISl": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 2.3357675672741607e-05,
+          "mean_abs_residual_I": 0.0001814296265365556,
+          "mean_ratio": 18451.0390625,
+          "max_ratio": 46804.5
+        },
+        "VISp": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 2.5118055418715812e-05,
+          "mean_abs_residual_I": 0.0002243501367047429,
+          "mean_ratio": 22663.22265625,
+          "max_ratio": 52517.49609375
+        },
+        "VISpm": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 3.236806151107885e-05,
+          "mean_abs_residual_I": 0.00021164535428397357,
+          "mean_ratio": 21546.84765625,
+          "max_ratio": 45849.76171875
+        }
+      }
+    },
+    "test": {
+      "mse": 0.013098497875034809,
+      "mae": 0.09357789903879166,
+      "mean_residual_to_wc_ratio": 54941.45703125,
+      "r2": {
+        "VISal": {
+          "prediction": -2.731115023782619
+        },
+        "VISl": {
+          "prediction": 0.01254761822760797
+        },
+        "VISp": {
+          "prediction": 0.03699705135019171
+        },
+        "VISpm": {
+          "prediction": -0.39405086219132124
+        }
+      },
+      "per_region_residual_stats": {
+        "VISal": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 6.159093754831702e-05,
+          "mean_abs_residual_I": 0.0002380976511631161,
+          "mean_ratio": 24622.873046875,
+          "max_ratio": 27253.24609375
+        },
+        "VISl": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 4.848486423725262e-05,
+          "mean_abs_residual_I": 0.00024156318977475166,
+          "mean_ratio": 24670.0625,
+          "max_ratio": 27142.322265625
+        },
+        "VISp": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 1.2684813555097207e-05,
+          "mean_abs_residual_I": 0.0003208740090485662,
+          "mean_ratio": 32122.48046875,
+          "max_ratio": 34123.9140625
+        },
+        "VISpm": {
+          "mean_abs_wc_E": 0.0,
+          "mean_abs_wc_I": 0.0,
+          "mean_abs_residual_E": 1.6689255062374286e-05,
+          "mean_abs_residual_I": 0.00027703275554813445,
+          "mean_ratio": 27774.974609375,
+          "max_ratio": 29606.875
+        }
+      }
+    }
+  }
+}

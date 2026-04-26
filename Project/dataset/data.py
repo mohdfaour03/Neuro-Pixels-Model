@@ -1,5 +1,7 @@
 """Dataset loading and preprocessing."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Union
@@ -41,11 +43,61 @@ class PreparedData:
     y_max: np.ndarray
     u_scaler: StandardScaler
     beh_scaler: StandardScaler
+    integration_dt: float
+    t_min: float
+    t_max: float
+
+    @property
+    def n_regions(self) -> int:
+        return len(self.regions)
+
+    @property
+    def n_stim(self) -> int:
+        return self.u_train.shape[1]
+
+    @property
+    def n_behavioral(self) -> int:
+        return self.beh_train.shape[1]
+
+    def get_split_tensors(
+        self,
+        split: str,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        if split == "train":
+            return self.t_train, self.u_train, self.beh_train, self.y_train
+        if split == "val":
+            return self.t_val, self.u_val, self.beh_val, self.y_val
+        if split == "test":
+            return self.t_test, self.u_test, self.beh_test, self.y_test
+        raise ValueError("split must be 'train', 'val', or 'test'")
+
+    def get_split_times(self, split: str) -> np.ndarray:
+        if split == "train":
+            return self.t_ds_train
+        if split == "val":
+            return self.t_ds_val
+        if split == "test":
+            return self.t_ds_test
+        raise ValueError("split must be 'train', 'val', or 'test'")
 
 
-def _downsample(values: np.ndarray, downsample: int, trailing_shape: tuple) -> np.ndarray:
+def _downsample(values: np.ndarray, downsample: int, trailing_shape: tuple[int, ...]) -> np.ndarray:
     n_trim = (len(values) // downsample) * downsample
     return values[:n_trim].reshape(-1, downsample, *trailing_shape).mean(axis=1)
+
+
+def _normalize_time(
+    t_ds_train: np.ndarray,
+    t_ds_val: np.ndarray,
+    t_ds_test: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
+    t_min = float(t_ds_train.min())
+    t_max = float(t_ds_train.max())
+    denom = max(t_max - t_min, 1e-8)
+    t_norm_train = (t_ds_train - t_min) / denom
+    t_norm_val = (t_ds_val - t_min) / denom
+    t_norm_test = (t_ds_test - t_min) / denom
+    return t_norm_train, t_norm_val, t_norm_test, t_min, t_max
 
 
 def load_preprocess_data(
@@ -68,6 +120,7 @@ def load_preprocess_data(
 
     train_end = int(train_fraction * len(t_raw))
     val_end = train_end + int(val_fraction * len(t_raw))
+
     y_raw_train, y_raw_val, y_raw_test = (
         y_raw[:train_end, :],
         y_raw[train_end:val_end, :],
@@ -78,7 +131,11 @@ def load_preprocess_data(
         u_raw[train_end:val_end, :],
         u_raw[val_end:, :],
     )
-    t_raw_train, t_raw_val, t_raw_test = t_raw[:train_end], t_raw[train_end:val_end], t_raw[val_end:]
+    t_raw_train, t_raw_val, t_raw_test = (
+        t_raw[:train_end],
+        t_raw[train_end:val_end],
+        t_raw[val_end:],
+    )
     running_raw_train, running_raw_val, running_raw_test = (
         running_raw[:train_end],
         running_raw[train_end:val_end],
@@ -108,19 +165,20 @@ def load_preprocess_data(
     pupil_ds_val = _downsample(pupil_raw_val, downsample, ())
     pupil_ds_test = _downsample(pupil_raw_test, downsample, ())
 
-    running_ds_train = np.clip(running_ds_train, 0, None)
-    running_ds_val = np.clip(running_ds_val, 0, None)
-    running_ds_test = np.clip(running_ds_test, 0, None)
+    running_ds_train = np.clip(running_ds_train, 0.0, None)
+    running_ds_val = np.clip(running_ds_val, 0.0, None)
+    running_ds_test = np.clip(running_ds_test, 0.0, None)
 
     pupil_clip_train = np.percentile(pupil_ds_train, 99)
-    pupil_ds_train = np.clip(pupil_ds_train, 0, pupil_clip_train)
-    pupil_ds_val = np.clip(pupil_ds_val, 0, pupil_clip_train)
-    pupil_ds_test = np.clip(pupil_ds_test, 0, pupil_clip_train)
+    pupil_ds_train = np.clip(pupil_ds_train, 0.0, pupil_clip_train)
+    pupil_ds_val = np.clip(pupil_ds_val, 0.0, pupil_clip_train)
+    pupil_ds_test = np.clip(pupil_ds_test, 0.0, pupil_clip_train)
 
-    t_min, t_max = t_ds_train.min(), t_ds_train.max()
-    t_norm_train = (t_ds_train - t_min) / (t_max - t_min)
-    t_norm_val = (t_ds_val - t_min) / (t_max - t_min)
-    t_norm_test = (t_ds_test - t_min) / (t_max - t_min)
+    t_norm_train, t_norm_val, t_norm_test, t_min, t_max = _normalize_time(
+        t_ds_train,
+        t_ds_val,
+        t_ds_test,
+    )
 
     u_scaler = StandardScaler()
     u_norm_train = u_scaler.fit_transform(u_ds_train)
@@ -137,9 +195,15 @@ def load_preprocess_data(
 
     y_min = y_ds_train.min(axis=0, keepdims=True)
     y_max = y_ds_train.max(axis=0, keepdims=True)
-    y_norm_train = (y_ds_train - y_min) / (y_max - y_min + 1e-10)
-    y_norm_val = (y_ds_val - y_min) / (y_max - y_min + 1e-10)
-    y_norm_test = (y_ds_test - y_min) / (y_max - y_min + 1e-10)
+    y_denom = y_max - y_min + 1e-10
+    y_norm_train = (y_ds_train - y_min) / y_denom
+    y_norm_val = (y_ds_val - y_min) / y_denom
+    y_norm_test = (y_ds_test - y_min) / y_denom
+
+    if len(t_ds_train) > 1:
+        integration_dt = float(np.median(np.diff(t_ds_train)))
+    else:
+        integration_dt = 1.0
 
     return PreparedData(
         t_train=torch.tensor(t_norm_train, dtype=torch.float32, device=device).unsqueeze(1),
@@ -172,4 +236,7 @@ def load_preprocess_data(
         y_max=y_max,
         u_scaler=u_scaler,
         beh_scaler=beh_scaler,
+        integration_dt=integration_dt,
+        t_min=t_min,
+        t_max=t_max,
     )

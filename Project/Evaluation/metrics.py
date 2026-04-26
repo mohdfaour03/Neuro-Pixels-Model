@@ -1,9 +1,13 @@
 """Evaluation metrics."""
 
+from __future__ import annotations
+
 import numpy as np
 
 
 def r_squared(y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    ss_res = np.sum((y_true - y_pred) ** 2)
-    ss_tot = np.sum((y_true - y_true.mean()) ** 2)
-    return 1 - ss_res / ss_tot
+    ss_res = float(np.sum((y_true - y_pred) ** 2))
+    ss_tot = float(np.sum((y_true - y_true.mean()) ** 2))
+    if ss_tot <= 1e-12:
+        return 0.0
+    return 1.0 - ss_res / ss_tot

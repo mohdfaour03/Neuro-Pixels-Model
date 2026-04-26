@@ -1,0 +1,34 @@
+{
+  "VISal": {
+    "mean_abs_wc_E": 0.0015428363112732768,
+    "mean_abs_wc_I": 0.0010524161625653505,
+    "mean_abs_residual_E": 0.0,
+    "mean_abs_residual_I": 0.0,
+    "mean_ratio": 0.0,
+    "max_ratio": 0.0
+  },
+  "VISl": {
+    "mean_abs_wc_E": 0.0015226841205731034,
+    "mean_abs_wc_I": 0.0010439524194225669,
+    "mean_abs_residual_E": 0.0,
+    "mean_abs_residual_I": 0.0,
+    "mean_ratio": 0.0,
+    "max_ratio": 0.0
+  },
+  "VISp": {
+    "mean_abs_wc_E": 0.0010842825286090374,
+    "mean_abs_wc_I": 0.0010329310316592455,
+    "mean_abs_residual_E": 0.0,
+    "mean_abs_residual_I": 0.0,
+    "mean_ratio": 0.0,
+    "max_ratio": 0.0
+  },
+  "VISpm": {
+    "mean_abs_wc_E": 0.001556109869852662,
+    "mean_abs_wc_I": 0.0010512557346373796,
+    "mean_abs_residual_E": 0.0,
+    "mean_abs_residual_I": 0.0,
+    "mean_ratio": 0.0,
+    "max_ratio": 0.0
+  }
+}
